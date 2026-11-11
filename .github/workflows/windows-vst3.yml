@@ -45,7 +45,12 @@ jobs:
           }
 
       - name: Configure JUCE VST3 (MSVC x64)
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+        shell: pwsh
+        run: |
+          $cmake = [System.IO.File]::ReadAllText((Join-Path $PWD "CMakeLists.txt"))
+          $cmake = $cmake.Replace("LANGUAGES CXX", "LANGUAGES C CXX")
+          [System.IO.File]::WriteAllText((Join-Path $PWD "CMakeLists.txt"), $cmake)
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
 
       - name: Build DSP tests
         run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory --parallel 3
