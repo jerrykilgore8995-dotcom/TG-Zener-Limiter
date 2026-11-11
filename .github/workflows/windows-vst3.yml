@@ -1,7 +1,7 @@
 name: Build TG12413 Limiter VST3
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -10,40 +10,53 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout plugin source
+      - name: Checkout source archive
         uses: actions/checkout@v4
 
-      - name: Unpack source ZIP if supplied
+      - name: Reassemble and extract JUCE source bundle
         shell: pwsh
         run: |
-          $package = Get-ChildItem -Path . -File -Filter "TG12413*Source*.zip" | Select-Object -First 1
-          if ($null -ne $package) {
-            Write-Host "Extracting plugin source ZIP: $($package.Name)"
-            Expand-Archive -LiteralPath $package.FullName -DestinationPath . -Force
-          } else {
-            Write-Host "No source ZIP found. Checking for already-extracted sources."
+          $parts = @(Get-ChildItem -Path ".source-transfer" -Filter "part*.b64" | Sort-Object Name)
+          if ($parts.Count -ne 25) { throw "Expected 25 source-package transfer segments. Found $($parts.Count)." }
+          $builder = [System.Text.StringBuilder]::new()
+          foreach ($part in $parts) { [void] $builder.Append([System.IO.File]::ReadAllText($part.FullName).Trim()) }
+          $bytes = [Convert]::FromBase64String($builder.ToString())
+          [System.IO.File]::WriteAllBytes((Join-Path $PWD "TG12413-source.zip"), $bytes)
+          Write-Host "Reassembled TG12413-source.zip ($($bytes.Length) bytes)"
+          Expand-Archive -LiteralPath "TG12413-source.zip" -DestinationPath "." -Force
+          @("CMakeLists.txt","Source/PluginProcessor.cpp","Source/PluginEditor.cpp","Source/TGFastZenerLimiter.h","Source/TGReferenceGrid.h","reference/TGZener4Freq_THD2pct_InputScaled.bin","tools/generate_gui_assets.py") | ForEach-Object {
+            if (!(Test-Path $_)) { throw "Missing expected source: $_" }
           }
 
-      - name: Check all required sources and assets
+      - name: Install image-asset generator dependencies
+        run: python -m pip install --disable-pip-version-check pillow numpy
+
+      - name: Generate authentic TG12413 rack GUI assets
         shell: pwsh
         run: |
-          @("CMakeLists.txt", "Source/PluginProcessor.cpp", "Source/PluginEditor.cpp", "Source/TGFastZenerLimiter.h", "Source/TGReferenceGrid.h", "reference/TGZener4Freq_THD2pct_InputScaled.bin", "Assets/faceplate.png", "tests/test_basic.cpp") | ForEach-Object {
-            if (!(Test-Path $_)) { throw "Missing plugin source: $_ . On a phone, upload the complete TG12413_Authentic_Rack_JUCE_Source_v1p1.zip file to the root of this repository. Do NOT unzip it." }
+          $s = [System.IO.File]::ReadAllText((Join-Path $PWD "tools/generate_gui_assets.py"))
+          $s = $s.Replace("FONT='/usr/share/fonts/truetype/lato/Lato-Medium.ttf'", "FONT='C:/Windows/Fonts/arial.ttf'")
+          $s = $s.Replace("BOLD='/usr/share/fonts/truetype/lato/Lato-Bold.ttf'", "BOLD='C:/Windows/Fonts/arialbd.ttf'")
+          $s = $s.Replace("SERIF='/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'", "SERIF='C:/Windows/Fonts/georgiab.ttf'")
+          [System.IO.File]::WriteAllText((Join-Path $PWD "tools/generate_gui_assets.py"), $s)
+          python tools/generate_gui_assets.py
+          @("Assets/faceplate.png","Assets/knob_red.png","Assets/knob_blue.png","Assets/button_on.png","Assets/button_off.png") | ForEach-Object {
+            if (!(Test-Path $_)) { throw "Asset creation failed: $_" }
           }
 
-      - name: Configure plugin (JUCE 8 and MSVC)
+      - name: Configure JUCE VST3 (MSVC x64)
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
 
-      - name: Build DSP regression tests
+      - name: Build DSP tests
         run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory --parallel 3
 
-      - name: Test DSP
+      - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Build Windows VST3
         run: cmake --build build --config Release --target TGZenerRack_VST3 --parallel 3
 
-      - name: Upload compiled Windows VST3
+      - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
           name: TG12413-Limiter-Windows-x64-VST3
