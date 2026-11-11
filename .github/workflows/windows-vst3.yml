@@ -44,6 +44,20 @@ jobs:
             if (!(Test-Path $_)) { throw "Asset creation failed: $_" }
           }
 
+      - name: JUCE 8 state serialization compatibility
+        shell: pwsh
+        run: |
+          $path = Join-Path $PWD "Source/PluginProcessor.cpp"
+          $s = [System.IO.File]::ReadAllText($path)
+          if (!$s.Contains("juce::copyXmlToBinary(*xml, destData)") -or !$s.Contains("juce::getXmlFromBinary(data, size)")) { throw "Expected legacy JUCE state code not found; inspect sources before patching." }
+          $s = $s.Replace('    if (auto xml = parameters.copyState().createXml())', '    juce::MemoryOutputStream stream(destData, false);')
+          $s = $s.Replace('        juce::copyXmlToBinary(*xml, destData);', '    parameters.copyState().writeToStream(stream);')
+          $s = $s.Replace('    if (auto xml = juce::getXmlFromBinary(data, size))', '    const auto state = juce::ValueTree::readFromData(data, static_cast<size_t>(size));')
+          $s = $s.Replace('        if (xml->hasTagName(parameters.state.getType().toString()))', '    if (state.isValid() && state.hasType(parameters.state.getType()))')
+          $s = $s.Replace('            parameters.replaceState(juce::ValueTree::fromXml(*xml));', '        parameters.replaceState(state);')
+          [System.IO.File]::WriteAllText($path, $s)
+          Write-Host "Applied JUCE 8 binary state serialization fix"
+
       - name: Configure JUCE VST3 (MSVC x64)
         shell: pwsh
         run: |
