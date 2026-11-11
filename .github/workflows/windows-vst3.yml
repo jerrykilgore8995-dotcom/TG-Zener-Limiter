@@ -10,23 +10,40 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout sources
+      - name: Checkout plugin source
         uses: actions/checkout@v4
-      - name: Check required sources and assets
+
+      - name: Unpack source ZIP if supplied
         shell: pwsh
         run: |
-          @("CMakeLists.txt","Source/PluginProcessor.cpp","Source/PluginEditor.cpp","reference/TGZener4Freq_THD2pct_InputScaled.bin","Assets/faceplate.png") | ForEach-Object {
-            if (!(Test-Path $_)) { throw "Missing required file: $_ . Extract and upload all files from the supplied JUCE source ZIP." }
+          $package = Get-ChildItem -Path . -File -Filter "TG12413*Source*.zip" | Select-Object -First 1
+          if ($null -ne $package) {
+            Write-Host "Extracting plugin source ZIP: $($package.Name)"
+            Expand-Archive -LiteralPath $package.FullName -DestinationPath . -Force
+          } else {
+            Write-Host "No source ZIP found. Checking for already-extracted sources."
           }
-      - name: Configure plugin (JUCE 8 / MSVC)
+
+      - name: Check all required sources and assets
+        shell: pwsh
+        run: |
+          @("CMakeLists.txt", "Source/PluginProcessor.cpp", "Source/PluginEditor.cpp", "Source/TGFastZenerLimiter.h", "Source/TGReferenceGrid.h", "reference/TGZener4Freq_THD2pct_InputScaled.bin", "Assets/faceplate.png", "tests/test_basic.cpp") | ForEach-Object {
+            if (!(Test-Path $_)) { throw "Missing plugin source: $_ . On a phone, upload the complete TG12413_Authentic_Rack_JUCE_Source_v1p1.zip file to the root of this repository. Do NOT unzip it." }
+          }
+
+      - name: Configure plugin (JUCE 8 and MSVC)
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
       - name: Build DSP regression tests
         run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory --parallel 3
+
       - name: Test DSP
         run: ctest --test-dir build -C Release --output-on-failure
+
       - name: Build Windows VST3
         run: cmake --build build --config Release --target TGZenerRack_VST3 --parallel 3
-      - name: Upload compiled VST3
+
+      - name: Upload compiled Windows VST3
         uses: actions/upload-artifact@v4
         with:
           name: TG12413-Limiter-Windows-x64-VST3
