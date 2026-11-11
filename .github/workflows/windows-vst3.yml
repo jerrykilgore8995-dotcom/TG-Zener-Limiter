@@ -1,0 +1,34 @@
+name: Build TG12413 Limiter VST3
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Check required sources and assets
+        shell: pwsh
+        run: |
+          @("CMakeLists.txt","Source/PluginProcessor.cpp","Source/PluginEditor.cpp","reference/TGZener4Freq_THD2pct_InputScaled.bin","Assets/faceplate.png") | ForEach-Object {
+            if (!(Test-Path $_)) { throw "Missing required file: $_ . Extract and upload all files from the supplied JUCE source ZIP." }
+          }
+      - name: Configure plugin (JUCE 8 / MSVC)
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+      - name: Build DSP regression tests
+        run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory --parallel 3
+      - name: Test DSP
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Build Windows VST3
+        run: cmake --build build --config Release --target TGZenerRack_VST3 --parallel 3
+      - name: Upload compiled VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: TG12413-Limiter-Windows-x64-VST3
+          path: build/TGZenerRack_artefacts/Release/VST3/
+          if-no-files-found: error
