@@ -28,9 +28,9 @@ jobs:
           $cmake = $cmake.Replace("LANGUAGES CXX", "LANGUAGES C CXX")
           $cmake += @'
 
-add_executable(tg_measure_44100 tests/measure_alias_44100.cpp)
-target_link_libraries(tg_measure_44100 PRIVATE juce::juce_dsp juce::juce_recommended_config_flags)
-'@
+          add_executable(tg_measure_44100 tests/measure_alias_44100.cpp)
+          target_link_libraries(tg_measure_44100 PRIVATE juce::juce_dsp juce::juce_recommended_config_flags)
+          '@
           [System.IO.File]::WriteAllText((Join-Path $PWD "CMakeLists.txt"), $cmake)
       - name: Configure measurement executable
         run: cmake -S . -B build-measure -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=OFF
