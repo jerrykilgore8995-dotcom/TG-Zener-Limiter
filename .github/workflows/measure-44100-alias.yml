@@ -1,0 +1,53 @@
+name: Measure 44k1 TG limiter aliasing
+on:
+  push:
+    paths:
+      - '.github/workflows/measure-44100-alias.yml'
+  workflow_dispatch:
+
+jobs:
+  measure-alias:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract actual v1.3 plugin sources
+        shell: pwsh
+        run: |
+          $parts = @(Get-ChildItem ".source-transfer" -Filter "part*.b64" | Sort-Object Name)
+          if ($parts.Count -ne 25) { throw "Need exact source archive" }
+          $builder = [System.Text.StringBuilder]::new()
+          foreach ($p in $parts) { [void] $builder.Append([System.IO.File]::ReadAllText($p.FullName).Trim()) }
+          [System.IO.File]::WriteAllBytes((Join-Path $PWD "source.zip"), [Convert]::FromBase64String($builder.ToString()))
+          Expand-Archive -LiteralPath "source.zip" -DestinationPath "." -Force
+          python .build-updates/apply_illuminated_attack.py
+          python .build-updates/apply_4x_oversampling.py
+          Copy-Item ".build-updates/measure_alias_44100.cpp" "tests/measure_alias_44100.cpp"
+          $cmake = [System.IO.File]::ReadAllText((Join-Path $PWD "CMakeLists.txt"))
+          $cmake = $cmake.Replace("LANGUAGES CXX", "LANGUAGES C CXX")
+          $cmake += @'
+
+add_executable(tg_measure_44100 tests/measure_alias_44100.cpp)
+target_link_libraries(tg_measure_44100 PRIVATE juce::juce_dsp juce::juce_recommended_config_flags)
+'@
+          [System.IO.File]::WriteAllText((Join-Path $PWD "CMakeLists.txt"), $cmake)
+      - name: Configure measurement executable
+        run: cmake -S . -B build-measure -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=OFF
+      - name: Build measurement executable
+        run: cmake --build build-measure --config Release --target tg_measure_44100 --parallel 3
+      - name: Measure actual TG DSP at 44.1kHz
+        shell: pwsh
+        run: |
+          & "./build-measure/Release/tg_measure_44100.exe" "./reference/TGZener4Freq_THD2pct_InputScaled.bin" 1> "TG_44100_alias_spectra.csv" 2> "TG_44100_checks.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Measurement failed" }
+          Get-Content "TG_44100_checks.txt"
+          Get-Content "TG_44100_alias_spectra.csv" | Select-Object -First 12
+      - name: Upload numerical results
+        uses: actions/upload-artifact@v4
+        with:
+          name: TG12413-v1.3-44k1-alias-measurements
+          path: |
+            TG_44100_alias_spectra.csv
+            TG_44100_checks.txt
+          if-no-files-found: error
