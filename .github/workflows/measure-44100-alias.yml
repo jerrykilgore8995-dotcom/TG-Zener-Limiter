@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - '.github/workflows/measure-44100-alias.yml'
+      - '.build-updates/measure_alias_44100.cpp'
   workflow_dispatch:
 
 jobs:
