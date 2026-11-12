@@ -57,7 +57,7 @@ Result measure(const char* path,int factor,int pct,bool nonlinear,bool fixed,int
     cell->setControls(controls);
     if(fixed)cell->setReferenceToneForValidation(f);
     std::vector<float> y(N);
-    constexpr double signalDb=-30., amplitude=std::pow(10.,signalDb/20.);
+    const double signalDb=-30., amplitude=std::pow(10.,signalDb/20.);
     std::unique_ptr<juce::dsp::Oversampling<float>> os;
     if(factor==4) {
         os=std::make_unique<juce::dsp::Oversampling<float>>(
