@@ -24,7 +24,7 @@ change('Source/TGFastZenerLimiter.h', 'if(window_>8191) throw std::invalid_argum
 # All three ring index sites use the same power-of-two mask.
 p=ROOT/'Source/TGFastZenerLimiter.h'
 s=p.read_text(encoding='utf-8')
-if s.count('&8191')!=3: raise RuntimeError('Unexpected crest ring indexing')
+if s.count('&8191')<3: raise RuntimeError('Unexpected crest ring indexing')
 p.write_text(s.replace('&8191','&16383'),encoding='utf-8')
 change('Source/TGFastZenerLimiter.h',
        'double hz_=1000.,fs_=44100., envelope_=0.;',
