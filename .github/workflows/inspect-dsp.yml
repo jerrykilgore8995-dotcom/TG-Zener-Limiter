@@ -1,0 +1,24 @@
+name: Inspect limiter DSP source
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-dsp.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print extracted DSP implementation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, glob, io, zipfile
+          p=sorted(glob.glob('.source-transfer/part*.b64'))
+          data=base64.b64decode(''.join(open(x).read().strip() for x in p))
+          z=zipfile.ZipFile(io.BytesIO(data))
+          for name in ['Source/TGFastZenerLimiter.h','Source/TGReferenceGrid.h','Source/PluginProcessor.cpp','Source/PluginProcessor.h','tests/test_spectra.cpp']:
+              print('===== START '+name+' =====',flush=True)
+              print(z.read(name).decode('utf-8'),flush=True)
+              print('===== END '+name+' =====',flush=True)
+          PY
