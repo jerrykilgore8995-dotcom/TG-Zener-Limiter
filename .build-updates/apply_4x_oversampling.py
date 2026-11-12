@@ -21,9 +21,11 @@ def replace_span(rel, start, end, replacement):
 # Keep the 13ms crest hold valid at 192kHz sessions with 4x processing (768kHz).
 change('Source/TGFastZenerLimiter.h', 'std::array<Node,8192> nodes_{};', 'std::array<Node,16384> nodes_{};')
 change('Source/TGFastZenerLimiter.h', 'if(window_>8191) throw std::invalid_argument("13ms hold requires larger ring for fs>630kHz"); reset();}', 'if(window_>16383) throw std::invalid_argument("13ms hold requires larger ring for fs>1.26MHz"); reset();}')
-change('Source/TGFastZenerLimiter.h', '&8191', '&16383')
-# Two occurrences of ring masks, but change() only first, so change second too.
-change('Source/TGFastZenerLimiter.h', '&8191', '&16383')
+# All three ring index sites use the same power-of-two mask.
+p=ROOT/'Source/TGFastZenerLimiter.h'
+s=p.read_text(encoding='utf-8')
+if s.count('&8191')!=3: raise RuntimeError('Unexpected crest ring indexing')
+p.write_text(s.replace('&8191','&16383'),encoding='utf-8')
 change('Source/TGFastZenerLimiter.h',
        'double hz_=1000.,fs_=44100., envelope_=0.;',
        'double hz_=1000.,fs_=44100., envelope_=0., follow_=0.001;')
