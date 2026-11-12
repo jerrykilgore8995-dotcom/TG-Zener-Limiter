@@ -28,6 +28,9 @@ jobs:
             if (!(Test-Path $_)) { throw "Missing expected source: $_" }
           }
 
+      - name: Integrate illuminated attack button and 1/8/15ms DSP
+        run: python .build-updates/apply_illuminated_attack.py
+
       - name: Install image-asset generator dependencies
         run: python -m pip install --disable-pip-version-check pillow numpy
 
@@ -67,7 +70,7 @@ jobs:
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
 
       - name: Build DSP tests
-        run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory --parallel 3
+        run: cmake --build build --config Release --target tg_test_basic tg_test_controls tg_test_program tg_test_autotrack tg_test_detector_clean tg_test_spectra tg_test_embedded_memory tg_test_attack --parallel 3
 
       - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
